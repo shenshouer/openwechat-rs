@@ -56,8 +56,8 @@ impl Client {
         self.mode = mode;
     }
 
-    pub fn set_domain(&mut self, domain: Option<String>) {
-        self.domain = domain.map(WechatDomain::new);
+    pub fn set_domain(&mut self, domain: Option<WechatDomain>) {
+        self.domain = domain;
     }
 
     pub fn get_domain(&self) -> Option<WechatDomain> {

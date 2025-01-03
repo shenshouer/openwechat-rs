@@ -11,6 +11,7 @@ use crate::{
         STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT, WEB_WX_NEW_LOGIN_PAGE,
     },
     errors::Error,
+    storage::WechatDomain,
 };
 
 /// normal 网页版模式
@@ -146,7 +147,10 @@ pub async fn get_login_info(client: &mut Client, url: &str) -> Result<LoginInfo,
     let u = Url::parse(url)
         .map_err(|e| Error::GetLoginInfo(format!("解析redirect uri: {url} 失败:\n {e}")))?;
 
-    client.set_domain(u.domain().map(|domain| domain.to_string()));
+    client.set_domain(
+        u.domain()
+            .map(|domain| WechatDomain::new(domain.to_string())),
+    );
 
     let mut req = reqwest::Request::new(Method::GET, u);
 

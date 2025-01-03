@@ -56,6 +56,10 @@ impl Caller {
         self.client.get_coookies().await
     }
 
+    pub fn set_domain(&mut self, domain: Option<WechatDomain>) {
+        self.client.set_domain(domain);
+    }
+
     pub fn get_domain(&self) -> Option<WechatDomain> {
         self.client.get_domain().clone()
     }

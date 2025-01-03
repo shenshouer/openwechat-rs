@@ -60,6 +60,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
     }
 
     pub async fn hot_login_init(&mut self, items: HotReloadStorageItem) {
+        debug!("bot::hot_login_init");
         for cookie in items.cookies.into_iter() {
             self.caller.add_cookies(cookie).await
         }
@@ -67,6 +68,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
         self.storage.login_info = items.login_info;
         self.storage.request = items.base_request;
         self.uuid = items.uuid.unwrap();
+        self.caller.set_domain(items.wechat_domain);
     }
 
     /// 使用uuid登录
@@ -157,6 +159,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
     }
 
     pub async fn web_init(&self) -> Result<(), Error> {
+        debug!("bot::web_init");
         match self.storage.request.as_ref() {
             None => Err(Error::NoBaseRequest),
             Some(base_req) => self.caller.web_init(base_req).await,
