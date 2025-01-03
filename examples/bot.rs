@@ -1,3 +1,4 @@
+use log::info;
 use tokio::signal;
 
 #[tokio::main]
@@ -10,10 +11,10 @@ async fn main() {
 
     match signal::ctrl_c().await {
         Ok(_) => {
-            println!("Ctrl-C received, shutting down");
+            info!("Ctrl-C received, shutting down");
         }
         Err(e) => {
-            eprintln!("Failed to listen for Ctrl-C: {}", e);
+            panic!("Failed to listen for Ctrl-C: {}", e);
         }
     }
 }
