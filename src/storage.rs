@@ -143,14 +143,14 @@ impl WechatDomain {
         Self(domain)
     }
     pub fn base_host(&self) -> String {
-        return format!("https://{}", self.0);
+        format!("https://{}", self.0)
     }
 
     pub fn file_host(&self) -> String {
-        return format!("https://file.{}", self.0);
+        format!("https://file.{}", self.0)
     }
 
     pub fn sync_host(&self) -> String {
-        return format!("https://webpush.{}", self.0);
+        format!("https://webpush.{}", self.0)
     }
 }
