@@ -8,7 +8,7 @@ use crate::{
     consts::{Status, REGEX_REDIRECT_URI},
     errors::Error,
     message::{default_message_handler, MessageHandler},
-    resp::{ResponseCheckLogin, ResponseWebInit},
+    resp::ResponseCheckLogin,
     storage::{
         BaseRequest, HotReloadStorageItem, JSONFileHostReloadStorage, Storage, StorageItemFetcher,
     },
@@ -142,10 +142,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
 
         self.dump_hot_reload_storage().await?;
 
-        let resp = self.web_init().await?;
-        dbg!(&resp);
-        self.storage.web_init_reponse = Some(resp);
-        Ok(())
+        self.web_init().await
     }
 
     async fn dump_hot_reload_storage(&mut self) -> Result<(), Error> {
@@ -162,12 +159,25 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
             .map_err(Error::DumpHotReloadStorage)
     }
 
-    pub async fn web_init(&self) -> Result<ResponseWebInit, Error> {
+    pub async fn web_init(&mut self) -> Result<(), Error> {
         debug!("bot::web_init");
-        match self.storage.request.as_ref() {
-            None => Err(Error::NoBaseRequest),
-            Some(base_req) => self.caller.web_init(base_req).await,
-        }
+
+        let (web_init_resp, base_req) = match self.storage.request.as_ref() {
+            None => return Err(Error::NoBaseRequest),
+            Some(base_req) => {
+                let web_init_resp = self.caller.web_init(base_req).await?;
+                (web_init_resp, base_req)
+            }
+        };
+
+        let login_info = self.storage.login_info.as_ref().unwrap();
+        self.caller
+            .web_wx_status_notify(base_req, &web_init_resp.user.user_name, login_info)
+            .await?;
+
+        self.storage.web_init_reponse = Some(web_init_resp);
+
+        Ok(())
     }
 
     pub fn set_uuid_callback(&mut self, uuid_callback: fn(uuid: &str)) {

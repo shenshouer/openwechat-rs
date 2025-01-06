@@ -70,4 +70,16 @@ impl Caller {
         debug!("caller::web_init");
         self.client.web_init(base_req).await
     }
+
+    pub async fn web_wx_status_notify(
+        &self,
+        base_req: &BaseRequest,
+        user_name: &str,
+        login_info: &LoginInfo,
+    ) -> Result<(), Error> {
+        debug!("caller::web_wx_status_notify");
+        self.client
+            .web_wx_status_notify(base_req, user_name, login_info)
+            .await
+    }
 }

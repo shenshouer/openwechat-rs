@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use reqwest_cookie_store::CookieStore;
 use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
@@ -14,9 +17,13 @@ pub struct Storage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BaseRequest {
+    #[serde(rename = "Uin")]
     pub uin: i64,
+    #[serde(rename = "Sid")]
     pub sid: String,
+    #[serde(rename = "Skey")]
     pub skey: String,
+    #[serde(rename = "DeviceID")]
     pub device_id: String,
 }
 
@@ -69,14 +76,14 @@ where
 
 pub struct JSONFileHostReloadStorage {
     filename: String,
-    file: Option<std::fs::File>,
+    file: Arc<RwLock<Option<std::fs::File>>>,
 }
 
 impl Default for JSONFileHostReloadStorage {
     fn default() -> Self {
         Self {
             filename: "storage.json".to_string(),
-            file: None,
+            file: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -85,32 +92,35 @@ impl JSONFileHostReloadStorage {
     pub fn new(filename: String) -> Self {
         Self {
             filename,
-            file: None,
+            file: Arc::new(RwLock::new(None)),
         }
     }
 }
 
 impl std::io::Read for JSONFileHostReloadStorage {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.file.is_none() {
-            self.file = Some(std::fs::File::open(&self.filename)?);
+        let mut file = self.file.write().unwrap();
+        if file.is_none() {
+            *file = Some(std::fs::File::open(&self.filename)?);
         }
-        self.file.as_mut().unwrap().read(buf)
+        file.as_mut().unwrap().read(buf)
     }
 }
 
 impl std::io::Write for JSONFileHostReloadStorage {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if self.file.is_none() {
-            self.file = Some(std::fs::File::create(&self.filename)?);
+        let mut file = self.file.write().unwrap();
+        if file.is_none() {
+            *file = Some(std::fs::File::create(&self.filename)?);
         }
-        self.file.as_mut().unwrap().write(buf)
+        file.as_mut().unwrap().write(buf)
     }
     fn flush(&mut self) -> std::io::Result<()> {
-        if self.file.is_none() {
-            self.file = Some(std::fs::File::create(&self.filename)?);
+        let mut file = self.file.write().unwrap();
+        if file.is_none() {
+            *file = Some(std::fs::File::create(&self.filename)?);
         }
-        self.file.as_mut().unwrap().flush()
+        file.as_mut().unwrap().flush()
     }
 }
 

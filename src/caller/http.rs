@@ -1,18 +1,22 @@
 use chrono::Utc;
 use log::debug;
-use reqwest::{header::HeaderValue, Method, StatusCode};
+use reqwest::{
+    header::{HeaderValue, CONTENT_TYPE},
+    Body, Method, StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
     caller::client::Client,
     consts::{
-        Status, APP_ID, JS_LOGIN, LOGIN, REGEX_STATUS_CODE, REGEX_UUID, STATUS_CODE_SCANNED,
-        STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT, WEB_WX_NEW_LOGIN_PAGE,
+        Status, APP_ID, JSON_CONTENT_TYPE, JS_LOGIN, LOGIN, REGEX_STATUS_CODE, REGEX_UUID,
+        STATUS_CODE_SCANNED, STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT,
+        WEB_WX_NEW_LOGIN_PAGE, WEB_WX_STATUS_NOTIFY,
     },
     errors::Error,
-    resp::ResponseCheckLogin,
-    storage::WechatDomain,
+    resp::{BaseResponse, ResponseCheckLogin},
+    storage::{BaseRequest, WechatDomain},
 };
 
 /// normal 网页版模式
@@ -95,8 +99,6 @@ pub async fn check_login(client: &Client, uuid: &str) -> Result<ResponseCheckLog
         .append_pair("r", &format!("{}", now_timestamp / 1579))
         .append_pair("_", &format!("{}", now_timestamp));
 
-    debug!("check_login req {}", login_url.as_str());
-
     let req = reqwest::Request::new(Method::GET, login_url);
     let resp = client
         .execute(req)
@@ -125,8 +127,83 @@ pub async fn check_login(client: &Client, uuid: &str) -> Result<ResponseCheckLog
     Ok(ResponseCheckLogin { status, raw: resp })
 }
 
-// /// 通知微信状态
-// fn web_wx_status_notify() {}
+/// 通知微信状态
+pub async fn web_wx_status_notify(
+    client: &Client,
+    base_req: &BaseRequest,
+    user_name: &str,
+    login_info: &LoginInfo,
+) -> Result<(), Error> {
+    debug!("web_wx_status_notify");
+    let path = format!(
+        "{}{}",
+        client.get_domain().unwrap().base_host(),
+        WEB_WX_STATUS_NOTIFY,
+    );
+    let mut notify_url = Url::parse(&path)
+        .map_err(|e| Error::StatusNotify(format!("解析url: {path} 失败:\n {e}")))?;
+    notify_url
+        .query_pairs_mut()
+        .append_pair("lang", "zh_CN")
+        .append_pair("pass_ticket", &login_info.pass_ticket);
+
+    let content = serde_json::json!({
+        "BaseRequest": base_req,
+        "ClientMsgId": Utc::now().timestamp(),
+        "Code":        3,
+        "FromUserName": user_name,
+        "ToUserName": user_name,
+    });
+
+    let mut req = reqwest::Request::new(Method::POST, notify_url);
+    *req.body_mut() = Some(Body::from(serde_json::to_vec(&content).unwrap()));
+    req.headers_mut().append(CONTENT_TYPE, JSON_CONTENT_TYPE);
+
+    let text = client
+        .execute(req)
+        .await
+        .map_err(|e| Error::StatusNotify(format!("请求url: {path} 失败:\n {e}")))?
+        .text()
+        .await
+        .map_err(|e| Error::StatusNotify(format!("解析web_wx_status_notify数据失败: {e}")))?;
+
+    let resp: ResponseWebWxStatusNotify = serde_json::from_str(&text).unwrap();
+    dbg!(&resp);
+    if !resp.base_response.is_ok() {
+        return Err(Error::StatusNotify(format!(
+            "web_wx_status_notify失败: {}",
+            resp.base_response.errmsg
+        )));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct ResponseWebWxStatusNotify {
+    #[serde(rename = "BaseResponse")]
+    base_response: BaseResponse,
+    #[serde(rename = "MsgID")]
+    msg_id: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::caller::http::ResponseWebWxStatusNotify;
+
+    #[test]
+    fn test_parse_response_web_ex_status_notify() {
+        let json = r#"{
+    "BaseResponse":
+    {
+        "Ret": 1,
+        "ErrMsg": ""
+    },
+    "MsgID": ""
+}"#;
+        let resp: ResponseWebWxStatusNotify = serde_json::from_str(json).unwrap();
+        println!("==> {:?}", resp);
+    }
+}
 
 /// 获取登录信息
 pub async fn get_login_info(client: &mut Client, url: &str) -> Result<LoginInfo, Error> {

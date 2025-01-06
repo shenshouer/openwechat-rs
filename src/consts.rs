@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use reqwest::header::HeaderValue;
 
 pub(crate) const WEB_WX_INIT: &str = "/cgi-bin/mmwebwx-bin/webwxinit";
-// pub(crate) const WEB_WX_STATUS_NOTIFY: &str = "/cgi-bin/mmwebwx-bin/webwxstatusnotify";
+pub(crate) const WEB_WX_STATUS_NOTIFY: &str = "/cgi-bin/mmwebwx-bin/webwxstatusnotify";
 // pub(crate) const WEB_WX_SYNC: &str = "/cgi-bin/mmwebwx-bin/webwxsync";
 // pub(crate) const WEB_WX_SENDMSG: &str = "/cgi-bin/mmwebwx-bin/webwxsendmsg";
 // pub(crate) const WEB_WX_GET_CONTACT: &str = "/cgi-bin/mmwebwx-bin/webwxgetcontact";

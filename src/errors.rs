@@ -26,4 +26,6 @@ pub enum Error {
     WebInit(String),
     #[error("No base request")]
     NoBaseRequest,
+    #[error("StatusNotify error: {0}")]
+    StatusNotify(String),
 }

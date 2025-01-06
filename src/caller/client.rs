@@ -17,7 +17,9 @@ use crate::{
     storage::{BaseRequest, WechatDomain},
 };
 
-use super::http::{check_login, get_login_info, get_login_uuid, LoginInfo, Mode};
+use super::http::{
+    check_login, get_login_info, get_login_uuid, web_wx_status_notify, LoginInfo, Mode,
+};
 
 pub struct Client {
     client: reqwest::Client,
@@ -199,6 +201,16 @@ impl Client {
             .map_err(|e| Error::WebInit(format!("解析web init数据失败: {e}")))?;
 
         Ok(res)
+    }
+
+    pub async fn web_wx_status_notify(
+        &self,
+        base_req: &BaseRequest,
+        user_name: &str,
+        login_info: &LoginInfo,
+    ) -> Result<(), Error> {
+        debug!("client::web_wx_status_notify");
+        web_wx_status_notify(self, base_req, user_name, login_info).await
     }
 }
 

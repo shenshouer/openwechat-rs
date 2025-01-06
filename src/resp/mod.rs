@@ -40,11 +40,11 @@ pub struct BaseResponse {
     pub errmsg: String,
 }
 
-// impl BaseResponse {
-//     pub fn is_ok(&self) -> bool {
-//         self.ret == Ret::Ok
-//     }
-// }
+impl BaseResponse {
+    pub fn is_ok(&self) -> bool {
+        self.ret == Ret::Ok
+    }
+}
 
 #[cfg(test)]
 mod tests {
