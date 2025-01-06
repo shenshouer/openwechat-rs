@@ -4,10 +4,11 @@ use log::{debug, warn};
 use rand::Rng;
 
 use crate::{
-    caller::{Caller, Mode, ResponseCheckLogin},
+    caller::{Caller, Mode},
     consts::{Status, REGEX_REDIRECT_URI},
     errors::Error,
     message::{default_message_handler, MessageHandler},
+    resp::{ResponseCheckLogin, ResponseWebInit},
     storage::{
         BaseRequest, HotReloadStorageItem, JSONFileHostReloadStorage, Storage, StorageItemFetcher,
     },
@@ -141,7 +142,10 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
 
         self.dump_hot_reload_storage().await?;
 
-        self.web_init().await
+        let resp = self.web_init().await?;
+        dbg!(&resp);
+        self.storage.web_init_reponse = Some(resp);
+        Ok(())
     }
 
     async fn dump_hot_reload_storage(&mut self) -> Result<(), Error> {
@@ -158,7 +162,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
             .map_err(Error::DumpHotReloadStorage)
     }
 
-    pub async fn web_init(&self) -> Result<(), Error> {
+    pub async fn web_init(&self) -> Result<ResponseWebInit, Error> {
         debug!("bot::web_init");
         match self.storage.request.as_ref() {
             None => Err(Error::NoBaseRequest),

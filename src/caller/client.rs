@@ -13,12 +13,11 @@ use url::Url;
 use crate::{
     consts::{JSON_CONTENT_TYPE, WEB_WX_INIT},
     errors::Error,
+    resp::{ResponseCheckLogin, ResponseWebInit},
     storage::{BaseRequest, WechatDomain},
 };
 
-use super::http::{
-    check_login, get_login_info, get_login_uuid, LoginInfo, Mode, ResponseCheckLogin,
-};
+use super::http::{check_login, get_login_info, get_login_uuid, LoginInfo, Mode};
 
 pub struct Client {
     client: reqwest::Client,
@@ -172,7 +171,8 @@ impl Client {
     }
 
     /// 请求获取初始化信息
-    pub async fn web_init(&self, base_req: &BaseRequest) -> Result<(), Error> {
+    pub async fn web_init(&self, base_req: &BaseRequest) -> Result<ResponseWebInit, Error> {
+        debug!("client::web_init");
         let init_url_str = format!(
             "{}{}",
             self.domain
@@ -191,15 +191,14 @@ impl Client {
         *req.body_mut() = Some(Body::from(serde_json::to_vec(base_req).unwrap()));
         req.headers_mut().append(CONTENT_TYPE, JSON_CONTENT_TYPE);
 
-        let resp = self.execute(req).await?;
-
-        let text = resp
-            .text()
+        let res: ResponseWebInit = self
+            .execute(req)
+            .await?
+            .json()
             .await
             .map_err(|e| Error::WebInit(format!("解析web init数据失败: {e}")))?;
 
-        println!("==>>web init: {text}");
-        Ok(())
+        Ok(res)
     }
 }
 

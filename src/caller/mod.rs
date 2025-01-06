@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
 use client::Client;
+pub use http::LoginInfo;
 pub use http::Mode;
-pub use http::{LoginInfo, ResponseCheckLogin};
 use log::debug;
 use reqwest_cookie_store::CookieStore;
 
+use crate::resp::ResponseCheckLogin;
+use crate::resp::ResponseWebInit;
 use crate::{
     errors::Error,
     storage::{BaseRequest, WechatDomain},
@@ -64,7 +66,8 @@ impl Caller {
         self.client.get_domain().clone()
     }
 
-    pub async fn web_init(&self, base_req: &BaseRequest) -> Result<(), Error> {
+    pub async fn web_init(&self, base_req: &BaseRequest) -> Result<ResponseWebInit, Error> {
+        debug!("caller::web_init");
         self.client.web_init(base_req).await
     }
 }

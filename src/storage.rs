@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use reqwest_cookie_store::CookieStore;
 use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{caller::LoginInfo, Error};
+use crate::{caller::LoginInfo, resp::ResponseWebInit, Error};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Storage {
     pub login_info: Option<LoginInfo>,
     pub request: Option<BaseRequest>,
+    pub web_init_reponse: Option<ResponseWebInit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

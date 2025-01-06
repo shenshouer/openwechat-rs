@@ -11,6 +11,7 @@ use crate::{
         STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT, WEB_WX_NEW_LOGIN_PAGE,
     },
     errors::Error,
+    resp::ResponseCheckLogin,
     storage::WechatDomain,
 };
 
@@ -68,15 +69,6 @@ pub async fn get_login_uuid(client: &Client) -> Result<String, Error> {
             Error::GetLoginUuid(format!("解析请求url: {JS_LOGIN} 的响应数据失败:\n {e}"))
         })?;
 
-    // let resp = reqwest::get(login_url.as_str())
-    //     .await
-    //     .map_err(|e| Error::GetLoginUuid(format!("请求url: {JS_LOGIN} 失败:\n {e}")))?
-    //     .text()
-    //     .await
-    //     .map_err(|e| {
-    //         Error::GetLoginUuid(format!("解析请求url: {JS_LOGIN} 的响应数据失败:\n {e}"))
-    //     })?;
-
     let uuid = REGEX_UUID
         .captures(&resp)
         .ok_or(Error::GetLoginUuid(format!(
@@ -87,12 +79,6 @@ pub async fn get_login_uuid(client: &Client) -> Result<String, Error> {
         .as_str()
         .to_string();
     Ok(uuid)
-}
-
-#[derive(Debug)]
-pub struct ResponseCheckLogin {
-    pub status: Status,
-    pub raw: String,
 }
 
 /// 检查登录状态
