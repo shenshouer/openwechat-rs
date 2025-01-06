@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use client::Client;
-pub use http::LoginInfo;
 pub use http::Mode;
 use log::debug;
 use reqwest_cookie_store::CookieStore;
 
+use crate::resp::LoginInfo;
 use crate::resp::ResponseCheckLogin;
 use crate::resp::ResponseWebInit;
 use crate::{

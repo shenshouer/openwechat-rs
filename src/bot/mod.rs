@@ -8,11 +8,10 @@ use crate::{
     consts::{Status, REGEX_REDIRECT_URI},
     errors::Error,
     message::{default_message_handler, MessageHandler},
-    resp::ResponseCheckLogin,
+    resp::{ResponseCheckLogin, ResponseSyncCheck},
     storage::{
         BaseRequest, HotReloadStorageItem, JSONFileHostReloadStorage, Storage, StorageItemFetcher,
     },
-    sync_check::ResponseSyncCheck,
 };
 
 pub struct Bot<T: Read + Write + StorageItemFetcher> {
@@ -27,7 +26,7 @@ pub struct Bot<T: Read + Write + StorageItemFetcher> {
     /// 心跳回调
     sync_check_callback: Option<fn(body: ResponseSyncCheck)>,
     /// 获取消息成功的handle
-    message_handler: MessageHandler,
+    message_handler: Option<MessageHandler>,
     // /// 获取消息发生错误的handle, 返回err == nil 则尝试继续监听
     // MessageErrorHandler: MessageErrorHandler,
     uuid: String,
@@ -180,6 +179,11 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
         Ok(())
     }
 
+    /// 消息循环
+    pub async fn message_loop(&self) {
+        if let Some(message_handle) = self.message_handler.as_ref() {}
+    }
+
     pub fn set_uuid_callback(&mut self, uuid_callback: fn(uuid: &str)) {
         self.uuid_callback = Some(uuid_callback);
     }
@@ -205,7 +209,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
     }
 
     pub fn set_message_handler(&mut self, message_handler: MessageHandler) {
-        self.message_handler = message_handler;
+        self.message_handler = Some(message_handler);
     }
 
     pub fn set_mode(&mut self, mode: Mode) {
@@ -236,7 +240,7 @@ impl Default for Bot<JSONFileHostReloadStorage> {
             logout_callback: Default::default(),
             uuid_callback: Default::default(),
             sync_check_callback: Default::default(),
-            message_handler: default_message_handler,
+            message_handler: Some(default_message_handler),
             uuid: Default::default(),
             device_id: Default::default(),
             caller: Default::default(),

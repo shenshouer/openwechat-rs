@@ -6,7 +6,10 @@ use std::{
 use reqwest_cookie_store::CookieStore;
 use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{caller::LoginInfo, resp::ResponseWebInit, Error};
+use crate::{
+    resp::{LoginInfo, ResponseWebInit},
+    Error,
+};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Storage {

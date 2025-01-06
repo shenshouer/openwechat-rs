@@ -13,13 +13,11 @@ use url::Url;
 use crate::{
     consts::{JSON_CONTENT_TYPE, WEB_WX_INIT},
     errors::Error,
-    resp::{ResponseCheckLogin, ResponseWebInit},
+    resp::{LoginInfo, ResponseCheckLogin, ResponseWebInit},
     storage::{BaseRequest, WechatDomain},
 };
 
-use super::http::{
-    check_login, get_login_info, get_login_uuid, web_wx_status_notify, LoginInfo, Mode,
-};
+use super::http::{check_login, get_login_info, get_login_uuid, web_wx_status_notify, Mode};
 
 pub struct Client {
     client: reqwest::Client,

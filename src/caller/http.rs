@@ -1,9 +1,6 @@
 use chrono::Utc;
 use log::debug;
-use reqwest::{
-    header::{HeaderValue, CONTENT_TYPE},
-    Body, Method, StatusCode,
-};
+use reqwest::{header::CONTENT_TYPE, Body, Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -12,10 +9,10 @@ use crate::{
     consts::{
         Status, APP_ID, JSON_CONTENT_TYPE, JS_LOGIN, LOGIN, REGEX_STATUS_CODE, REGEX_UUID,
         STATUS_CODE_SCANNED, STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT,
-        WEB_WX_NEW_LOGIN_PAGE, WEB_WX_STATUS_NOTIFY,
+        UOS_PATCH_CLIENT_VERSION, UOS_PATCH_EXTSPAM, WEB_WX_NEW_LOGIN_PAGE, WEB_WX_STATUS_NOTIFY,
     },
     errors::Error,
-    resp::{BaseResponse, ResponseCheckLogin},
+    resp::{BaseResponse, LoginInfo, ResponseCheckLogin},
     storage::{BaseRequest, WechatDomain},
 };
 
@@ -186,25 +183,6 @@ struct ResponseWebWxStatusNotify {
     msg_id: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::caller::http::ResponseWebWxStatusNotify;
-
-    #[test]
-    fn test_parse_response_web_ex_status_notify() {
-        let json = r#"{
-    "BaseResponse":
-    {
-        "Ret": 1,
-        "ErrMsg": ""
-    },
-    "MsgID": ""
-}"#;
-        let resp: ResponseWebWxStatusNotify = serde_json::from_str(json).unwrap();
-        println!("==> {:?}", resp);
-    }
-}
-
 /// 获取登录信息
 pub async fn get_login_info(client: &mut Client, url: &str) -> Result<LoginInfo, Error> {
     let u = Url::parse(url)
@@ -247,45 +225,4 @@ pub async fn get_login_info(client: &mut Client, url: &str) -> Result<LoginInfo,
 
     debug!("LoginInfo xml data: {}", text);
     serde_xml_rs::from_str(&text).map_err(|e| Error::GetLoginInfo(format!("解析响应失败:\n {e}")))
-}
-
-const UOS_PATCH_CLIENT_VERSION: HeaderValue = HeaderValue::from_static("2.0.0");
-const UOS_PATCH_EXTSPAM: HeaderValue = HeaderValue::from_static(
-    concat!(
-        "Go8FCIkFEokFCggwMDAwMDAwMRAGGvAESySibk50w5Wb3uTl2c2h64jVVrV7gNs06GFlWplHQbY/5FfiO++1yH4ykC",
-        "yNPWKXmco+wfQzK5R98D3so7rJ5LmGFvBLjGceleySrc3SOf2Pc1gVehzJgODeS0lDL3/I/0S2SSE98YgKleq6Uqx6ndTy9yaL9qFxJL7eiA/R",
-        "3SEfTaW1SBoSITIu+EEkXff+Pv8NHOk7N57rcGk1w0ZzRrQDkXTOXFN2iHYIzAAZPIOY45Lsh+A4slpgnDiaOvRtlQYCt97nmPLuTipOJ8Qc5p",
-        "M7ZsOsAPPrCQL7nK0I7aPrFDF0q4ziUUKettzW8MrAaiVfmbD1/VkmLNVqqZVvBCtRblXb5FHmtS8FxnqCzYP4WFvz3T0TcrOqwLX1M/DQvcHa",
-        "GGw0B0y4bZMs7lVScGBFxMj3vbFi2SRKbKhaitxHfYHAOAa0X7/MSS0RNAjdwoyGHeOepXOKY+h3iHeqCvgOH6LOifdHf/1aaZNwSkGotYnYSc",
-        "W8Yx63LnSwba7+hESrtPa/huRmB9KWvMCKbDThL/nne14hnL277EDCSocPu3rOSYjuB9gKSOdVmWsj9Dxb/iZIe+S6AiG29Esm+/eUacSba0k8",
-        "wn5HhHg9d4tIcixrxveflc8vi2/wNQGVFNsGO6tB5WF0xf/plngOvQ1/ivGV/C1Qpdhzznh0ExAVJ6dwzNg7qIEBaw+BzTJTUuRcPk92Sn6QDn",
-        "2Pu3mpONaEumacjW4w6ipPnPw+g2TfywJjeEcpSZaP4Q3YV5HG8D6UjWA4GSkBKculWpdCMadx0usMomsSS/74QgpYqcPkmamB4nVv1JxczYIT",
-        "IqItIKjD35IGKAUwAA=="
-    )
-);
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct LoginInfo {
-    pub ret: i32,
-    pub wxuin: i64,
-    #[serde(rename = "isgrayscale")]
-    pub is_gray_scale: i32,
-    pub message: String,
-    pub skey: String,
-    pub wxsid: String,
-    pub pass_ticket: String,
-}
-
-impl LoginInfo {
-    pub fn ok(&self) -> bool {
-        self.ret == 0
-    }
-
-    pub fn error(&self) -> Option<String> {
-        if self.ok() {
-            return None;
-        }
-
-        Some(self.message.clone())
-    }
 }

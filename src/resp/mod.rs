@@ -1,10 +1,14 @@
 pub use check_login::ResponseCheckLogin;
+pub use login_info::LoginInfo;
+pub use sync_check::ResponseSyncCheck;
 pub use web_init::ResponseWebInit;
 
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 mod check_login;
+mod login_info;
+mod sync_check;
 mod user;
 mod web_init;
 
