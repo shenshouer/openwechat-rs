@@ -28,4 +28,10 @@ pub enum Error {
     NoBaseRequest,
     #[error("StatusNotify error: {0}")]
     StatusNotify(String),
+    #[error("SyncCheck error: {0}")]
+    SyncCheck(String),
+    #[error("Sync error: {0}")]
+    Sync(String),
+    #[error("OpenFile error: {0}")]
+    OpenFile(String),
 }

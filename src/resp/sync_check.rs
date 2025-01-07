@@ -1,30 +1,33 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use strum::EnumString;
 
-#[derive(strum::Display, Debug, Clone, Copy, PartialEq, Eq)]
+use crate::Error;
+
+#[derive(strum::Display, EnumString, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Selector {
     /// 正常
-    #[strum(to_string = "0", serialize = "0")]
+    #[strum(serialize = "0")]
     Normal,
     /// 新消息
-    #[strum(to_string = "2", serialize = "2")]
+    #[strum(serialize = "2")]
     NewMessage,
     /// 联系人信息变更
-    #[strum(to_string = "4", serialize = "4")]
+    #[strum(serialize = "4")]
     ModContact,
     /// 添加或删除联系人
-    #[strum(to_string = "6", serialize = "6")]
+    #[strum(serialize = "6")]
     AddOrDelContact,
     /// 进入或退出聊天室
-    #[strum(to_string = "7", serialize = "7")]
+    #[strum(serialize = "7")]
     ModChatroom,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResponseSyncCheck {
-    #[serde(rename = "RetCode")]
+    #[serde(rename = "retcode")]
     pub ret_code: String,
     #[serde(
-        rename = "Selector",
+        rename = "selector",
         serialize_with = "ser_selector",
         deserialize_with = "de_selector"
     )]
@@ -32,13 +35,21 @@ pub struct ResponseSyncCheck {
 }
 
 impl ResponseSyncCheck {
-    pub fn is_success(&self) -> bool {
+    fn is_success(&self) -> bool {
         self.ret_code == "0"
     }
 
-    // pub fn is_normal(&self) -> bool {
-    //     self.is_normal() && self.selector == Selector::Normal
-    // }
+    pub fn error(self) -> Result<Self, Error> {
+        if !self.is_success() {
+            return Err(Error::SyncCheck(self.ret_code));
+        }
+
+        Ok(self)
+    }
+
+    pub fn is_normal(&self) -> bool {
+        self.is_success() && self.selector == Selector::Normal
+    }
 
     // pub fn has_new_message(&self) -> bool {
     //     self.is_normal() && self.selector == Selector::NewMessage
@@ -69,4 +80,21 @@ where
 {
     let s = selector.to_string();
     serializer.serialize_str(&s)
+}
+
+#[cfg(test)]
+mod tests {
+    use regex::Regex;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_sync_check() {
+        let json_str = r#"{retcode:"0",selector:"7"}"#;
+        let re = Regex::new(r#"(?P<key>\w+):"#).unwrap();
+        let corrected_json = re.replace_all(json_str, r#""$key":"#);
+        println!("corrected_json:{}", corrected_json);
+        let resp: ResponseSyncCheck = serde_json::from_str(&corrected_json).unwrap();
+        dbg!(resp);
+    }
 }

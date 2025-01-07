@@ -7,12 +7,16 @@ use url::Url;
 use crate::{
     caller::client::Client,
     consts::{
-        Status, APP_ID, JSON_CONTENT_TYPE, JS_LOGIN, LOGIN, REGEX_STATUS_CODE, REGEX_UUID,
-        STATUS_CODE_SCANNED, STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT, STATUS_CODE_WAIT,
-        UOS_PATCH_CLIENT_VERSION, UOS_PATCH_EXTSPAM, WEB_WX_NEW_LOGIN_PAGE, WEB_WX_STATUS_NOTIFY,
+        Status, APP_ID, JSON_CONTENT_TYPE, JS_LOGIN, LOGIN, REGEX_STATUS_CODE, REGEX_SYNC_CHECK,
+        REGEX_UUID, STATUS_CODE_SCANNED, STATUS_CODE_SUCCESS, STATUS_CODE_TIMEOUT,
+        STATUS_CODE_WAIT, SYNC_CHECK, UOS_PATCH_CLIENT_VERSION, UOS_PATCH_EXTSPAM,
+        WEB_WX_NEW_LOGIN_PAGE, WEB_WX_STATUS_NOTIFY, WEB_WX_SYNC,
     },
     errors::Error,
-    resp::{BaseResponse, LoginInfo, ResponseCheckLogin},
+    resp::{
+        BaseResponse, LoginInfo, ResponseCheckLogin, ResponseSyncCheck, ResponseSyncMessage,
+        ResponseWebInit, SyncKey,
+    },
     storage::{BaseRequest, WechatDomain},
 };
 
@@ -225,4 +229,112 @@ pub async fn get_login_info(client: &mut Client, url: &str) -> Result<LoginInfo,
 
     debug!("LoginInfo xml data: {}", text);
     serde_xml_rs::from_str(&text).map_err(|e| Error::GetLoginInfo(format!("解析响应失败:\n {e}")))
+}
+
+pub async fn sync_check(
+    client: &Client,
+    device_id: &str,
+    web_init_resp: &ResponseWebInit,
+    login_info: &LoginInfo,
+) -> Result<ResponseSyncCheck, Error> {
+    debug!("sync_check");
+    let path = format!("{}{}", client.get_domain().unwrap().base_host(), SYNC_CHECK);
+
+    let mut synccheck_url = Url::parse(&path)
+        .map_err(|e| Error::SyncCheck(format!("解析sync check url: {path} 失败:\n {e}")))?;
+
+    let timestamp = Utc::now().timestamp();
+    let sync_key = web_init_resp
+        .sync_key
+        .list
+        .iter()
+        .map(|kv| format!("{kv}"))
+        .collect::<Vec<_>>()
+        .join("|");
+
+    synccheck_url
+        .query_pairs_mut()
+        .append_pair("r", &format!("{timestamp}"))
+        .append_pair("skey", &login_info.skey)
+        .append_pair("sid", &login_info.wxsid)
+        .append_pair("uin", &format!("{}", login_info.wxuin))
+        .append_pair("deviceid", device_id)
+        .append_pair("_", &format!("{timestamp}"))
+        .append_pair("synckey", &sync_key);
+
+    let req = reqwest::Request::new(Method::GET, synccheck_url);
+    let resp_text = client
+        .execute(req)
+        .await
+        .map_err(|e| Error::SyncCheck(format!("请求url: {path} 失败:\n {e}")))?
+        .text()
+        .await
+        .map_err(|e| Error::SyncCheck(format!("解析sync check数据失败: {e}")))?;
+
+    debug!("resp_text:{}", resp_text);
+
+    let results = REGEX_SYNC_CHECK
+        .captures(&resp_text)
+        .ok_or(Error::SyncCheck(format!(
+            "从响应数据{resp_text}中解析sync check数据失败"
+        )))?;
+
+    if results.len() != 3 {
+        return Err(Error::SyncCheck(format!(
+            "从响应数据{resp_text}中解析window.synccheck数据失败"
+        )));
+    }
+
+    let value = serde_json::json!({
+        "retcode": results.get(1).unwrap().as_str(),
+        "selector": results.get(2).unwrap().as_str(),
+    });
+
+    let resp: ResponseSyncCheck = serde_json::from_value(value)
+        .map_err(|e| Error::SyncCheck(format!("组装ResponseSyncCheck数据错误: {e}")))?;
+
+    dbg!("sync_check", &resp);
+
+    Ok(resp)
+}
+
+pub async fn sync_message(
+    client: &Client,
+    base_req: &BaseRequest,
+    sync_key: &SyncKey,
+    login_info: &LoginInfo,
+) -> Result<ResponseSyncMessage, Error> {
+    debug!("sync_message");
+
+    let path = format!(
+        "{}{}",
+        client.get_domain().unwrap().base_host(),
+        WEB_WX_SYNC
+    );
+
+    let mut sync_url =
+        Url::parse(&path).map_err(|e| Error::Sync(format!("解析sync url: {path} 失败:\n {e}")))?;
+
+    sync_url
+        .query_pairs_mut()
+        .append_pair("sid", &login_info.wxsid)
+        .append_pair("skey", &login_info.skey)
+        .append_pair("pass_ticket", &login_info.pass_ticket);
+
+    let mut req = reqwest::Request::new(Method::POST, sync_url);
+    req.headers_mut().append(CONTENT_TYPE, JSON_CONTENT_TYPE);
+
+    let content = serde_json::json!({
+        "BaseRequest": base_req,
+        "SyncKey": sync_key,
+        "rr": Utc::now().timestamp(),
+    });
+
+    *req.body_mut() = Some(Body::from(serde_json::to_vec(&content).unwrap()));
+
+    let resp: ResponseSyncMessage = client.execute(req).await?.json().await?;
+
+    dbg!(&resp);
+
+    Ok(resp)
 }

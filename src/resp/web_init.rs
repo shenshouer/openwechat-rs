@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use super::{user::User, BaseResponse};
@@ -48,4 +50,10 @@ pub struct KVPair {
     pub key: String,
     #[serde(rename = "Val")]
     pub val: String,
+}
+
+impl Display for KVPair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.key, self.val)
+    }
 }

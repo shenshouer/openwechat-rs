@@ -1,7 +1,8 @@
 pub use check_login::ResponseCheckLogin;
 pub use login_info::LoginInfo;
-pub use sync_check::ResponseSyncCheck;
-pub use web_init::ResponseWebInit;
+pub use sync_check::{ResponseSyncCheck, Selector};
+pub use sync_message::ResponseSyncMessage;
+pub use web_init::{ResponseWebInit, SyncKey};
 
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -9,6 +10,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 mod check_login;
 mod login_info;
 mod sync_check;
+mod sync_message;
 mod user;
 mod web_init;
 

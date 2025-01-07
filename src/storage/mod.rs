@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::collections::HashMap;
 
 use reqwest_cookie_store::CookieStore;
 use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
@@ -10,6 +7,9 @@ use crate::{
     resp::{LoginInfo, ResponseWebInit},
     Error,
 };
+
+pub use json::tokio::JSONFileHostReloadStorage;
+mod json;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Storage {
@@ -77,64 +77,9 @@ where
     map.end()
 }
 
-pub struct JSONFileHostReloadStorage {
-    filename: String,
-    file: Arc<RwLock<Option<std::fs::File>>>,
-}
-
-impl Default for JSONFileHostReloadStorage {
-    fn default() -> Self {
-        Self {
-            filename: "storage.json".to_string(),
-            file: Arc::new(RwLock::new(None)),
-        }
-    }
-}
-
-impl JSONFileHostReloadStorage {
-    pub fn new(filename: String) -> Self {
-        Self {
-            filename,
-            file: Arc::new(RwLock::new(None)),
-        }
-    }
-}
-
-impl std::io::Read for JSONFileHostReloadStorage {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let mut file = self.file.write().unwrap();
-        if file.is_none() {
-            *file = Some(std::fs::File::open(&self.filename)?);
-        }
-        file.as_mut().unwrap().read(buf)
-    }
-}
-
-impl std::io::Write for JSONFileHostReloadStorage {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut file = self.file.write().unwrap();
-        if file.is_none() {
-            *file = Some(std::fs::File::create(&self.filename)?);
-        }
-        file.as_mut().unwrap().write(buf)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        let mut file = self.file.write().unwrap();
-        if file.is_none() {
-            *file = Some(std::fs::File::create(&self.filename)?);
-        }
-        file.as_mut().unwrap().flush()
-    }
-}
-
-pub trait StorageItemFetcher {
-    fn fetch(&mut self) -> Result<HotReloadStorageItem, Error>;
-}
-
-impl StorageItemFetcher for JSONFileHostReloadStorage {
-    fn fetch(&mut self) -> Result<HotReloadStorageItem, Error> {
-        serde_json::from_reader(self).map_err(|e| Error::FetchStorage(e.to_string()))
-    }
+pub(crate) trait StorageItemFetcher {
+    async fn dump<T: Serialize>(&mut self, data: T) -> Result<(), Error>;
+    async fn fetch(&mut self) -> Result<HotReloadStorageItem, Error>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

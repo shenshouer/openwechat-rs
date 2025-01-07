@@ -1,30 +1,31 @@
-use std::{io::Read, io::Write};
+use std::{sync::Arc, time::Duration};
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 use rand::Rng;
+use tokio::{sync::Mutex, time::sleep};
 
 use crate::{
     caller::{Caller, Mode},
     consts::{Status, REGEX_REDIRECT_URI},
     errors::Error,
     message::{default_message_handler, MessageHandler},
-    resp::{ResponseCheckLogin, ResponseSyncCheck},
+    resp::{ResponseCheckLogin, ResponseSyncCheck, Selector},
     storage::{
         BaseRequest, HotReloadStorageItem, JSONFileHostReloadStorage, Storage, StorageItemFetcher,
     },
 };
 
-pub struct Bot<T: Read + Write + StorageItemFetcher> {
+pub struct Bot {
     /// 定义回调函数类型
     scan_callback: Option<fn(body: ResponseCheckLogin)>,
     /// 登陆回调
     login_callback: Option<fn(body: ResponseCheckLogin)>,
     /// 登出回调
-    logout_callback: Option<fn(bot: Bot<T>)>,
+    // logout_callback: Option<fn(bot: Bot<T>)>,
     /// 获取UUID的回调
     uuid_callback: Option<fn(uuid: &str)>,
     /// 心跳回调
-    sync_check_callback: Option<fn(body: ResponseSyncCheck)>,
+    sync_check_callback: Option<fn(body: &ResponseSyncCheck)>,
     /// 获取消息成功的handle
     message_handler: Option<MessageHandler>,
     // /// 获取消息发生错误的handle, 返回err == nil 则尝试继续监听
@@ -33,12 +34,16 @@ pub struct Bot<T: Read + Write + StorageItemFetcher> {
     device_id: String,
     caller: Caller,
     storage: Storage,
-    hot_reload_storage: T,
+    hot_reload_storage: Arc<Mutex<JSONFileHostReloadStorage>>,
 }
 
-impl<T: Read + Write + StorageItemFetcher> Bot<T> {
+impl Bot {
     pub async fn hot_login(&mut self) -> Result<(), Error> {
-        match self.hot_reload_storage.fetch() {
+        let res = {
+            let mut hot_reload_storage = self.hot_reload_storage.lock().await;
+            hot_reload_storage.fetch().await
+        };
+        match res {
             Err(e) => {
                 warn!("hot reload storage error: {e}");
                 return self.login().await;
@@ -46,11 +51,16 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
             Ok(items) => self.hot_login_init(items).await,
         }
 
+        dbg!(&self.storage);
+
+        debug!("device_id: {}", self.device_id);
+
         if let Err(e) = self.web_init().await {
             warn!("web init error: {e} try login");
             return self.login().await;
         }
 
+        dbg!(&self.storage);
         Ok(())
     }
 
@@ -60,12 +70,15 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
     }
 
     pub async fn hot_login_init(&mut self, items: HotReloadStorageItem) {
-        debug!("bot::hot_login_init");
+        debug!("bot::hot_login_init {items:?}");
         for cookie in items.cookies.into_iter() {
             self.caller.add_cookies(cookie).await
         }
 
         self.storage.login_info = items.login_info;
+        if let Some(device_id) = items.base_request.as_ref().map(|r| r.device_id.clone()) {
+            self.device_id = device_id;
+        }
         self.storage.request = items.base_request;
         self.uuid = items.uuid.unwrap();
         self.caller.set_domain(items.wechat_domain);
@@ -82,7 +95,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
             let resp = self.caller.check_login(uuid).await?;
             match resp.status {
                 Status::Success => {
-                    debug!("登录成功 {}", resp.raw);
+                    info!("登录成功 {}", resp.raw);
                     // 判断是否有登录回调，如果有执行它
                     let data =
                         REGEX_REDIRECT_URI
@@ -105,7 +118,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
                 }
                 Status::Scanned => {
                     // 此时 resp.raw 为用户图像数据
-                    debug!("请在手机上确认登录");
+                    info!("请在手机上确认登录");
                     if let Some(scan_callback) = self.scan_callback.as_ref() {
                         scan_callback(resp);
                     }
@@ -114,7 +127,7 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
                     return Err(Error::LoginTimeout);
                 }
                 Status::Wait => {
-                    debug!("等待扫码");
+                    info!("等待扫码");
                     continue;
                 }
                 Status::Unknown(msg) => return Err(Error::StatusUnknown(msg)),
@@ -153,9 +166,9 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
             wechat_domain: self.caller.get_domain(),
             uuid: Some(self.uuid.clone()),
         };
-
-        serde_json::to_writer(&mut self.hot_reload_storage, &item)
-            .map_err(Error::DumpHotReloadStorage)
+        let mut hot_reload_storage = self.hot_reload_storage.lock().await;
+        // serde_json::to_writer(&mut *hot_reload_storage, &item).map_err(Error::DumpHotReloadStorage)
+        hot_reload_storage.dump(&item).await
     }
 
     pub async fn web_init(&mut self) -> Result<(), Error> {
@@ -180,17 +193,65 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
     }
 
     /// 消息循环
-    pub async fn message_loop(&self) {
-        if let Some(message_handle) = self.message_handler.as_ref() {}
+    pub async fn message_loop(&mut self) -> Result<(), Error> {
+        debug!("bot::message_loop");
+
+        let base_request = &self
+            .storage
+            .request
+            .as_ref()
+            .ok_or(Error::SyncCheck("没有base request".to_owned()))?;
+
+        let web_init_resp = self
+            .storage
+            .web_init_reponse
+            .as_ref()
+            .ok_or(Error::SyncCheck("没有web_init_reponse".to_owned()))?;
+
+        let login_info = self
+            .storage
+            .login_info
+            .as_ref()
+            .ok_or(Error::SyncCheck("没有login_info".to_owned()))?;
+
+        // loop {
+        let resp = self
+            .caller
+            .sync_check(&base_request.device_id, web_init_resp, login_info)
+            .await?
+            .error()?;
+
+        // 执行心跳回调
+        if let Some(sync_check_callback) = self.sync_check_callback.as_ref() {
+            sync_check_callback(&resp);
+        }
+
+        if resp.selector != Selector::Normal {
+            let resp_sync_msg = self
+                .caller
+                .sync_message(base_request, &web_init_resp.sync_key, login_info)
+                .await?;
+            // 更新SyncKey并且重新存入storage
+            if let Some(r) = self.storage.web_init_reponse.as_mut() {
+                r.sync_key = resp_sync_msg.sync_key.clone();
+            }
+            // if let Some(message_handle) = self.message_handler.as_ref() {
+            //     message_handle();
+            // }
+        }
+        sleep(Duration::from_secs(1)).await;
+        // }
+
+        Ok(())
     }
 
     pub fn set_uuid_callback(&mut self, uuid_callback: fn(uuid: &str)) {
         self.uuid_callback = Some(uuid_callback);
     }
 
-    pub fn set_hot_reload_storage(&mut self, hot_reload_storage: T) {
-        self.hot_reload_storage = hot_reload_storage;
-    }
+    // pub fn set_hot_reload_storage(&mut self, hot_reload_storage: T) {
+    //     self.hot_reload_storage = Arc::new(Mutex::new(hot_reload_storage));
+    // }
 
     pub fn set_scan_callback(&mut self, scan_callback: fn(body: ResponseCheckLogin)) {
         self.scan_callback = Some(scan_callback);
@@ -200,11 +261,11 @@ impl<T: Read + Write + StorageItemFetcher> Bot<T> {
         self.login_callback = Some(login_callback);
     }
 
-    pub fn set_logout_callback(&mut self, logout_callback: fn(bot: Bot<T>)) {
-        self.logout_callback = Some(logout_callback);
-    }
+    // pub fn set_logout_callback(&mut self, logout_callback: fn(bot: Bot<T>)) {
+    //     self.logout_callback = Some(logout_callback);
+    // }
 
-    pub fn set_sync_check_callback(&mut self, sync_check_callback: fn(body: ResponseSyncCheck)) {
+    pub fn set_sync_check_callback(&mut self, sync_check_callback: fn(body: &ResponseSyncCheck)) {
         self.sync_check_callback = Some(sync_check_callback);
     }
 
@@ -232,14 +293,14 @@ fn get_random_device_id() -> String {
     device_id // 返回生成的设备 ID
 }
 
-impl Default for Bot<JSONFileHostReloadStorage> {
+impl Default for Bot {
     fn default() -> Self {
         Self {
             scan_callback: Default::default(),
             login_callback: Default::default(),
-            logout_callback: Default::default(),
+            // logout_callback: Default::default(),
             uuid_callback: Default::default(),
-            sync_check_callback: Default::default(),
+            sync_check_callback: Some(default_sync_check_callback),
             message_handler: Some(default_message_handler),
             uuid: Default::default(),
             device_id: Default::default(),
@@ -248,4 +309,8 @@ impl Default for Bot<JSONFileHostReloadStorage> {
             hot_reload_storage: Default::default(),
         }
     }
+}
+
+fn default_sync_check_callback(body: &ResponseSyncCheck) {
+    dbg!("default_sync_check_callback", body);
 }

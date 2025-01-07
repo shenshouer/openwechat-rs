@@ -11,13 +11,19 @@ use tokio::sync::Mutex;
 use url::Url;
 
 use crate::{
+    caller::http::sync_check,
     consts::{JSON_CONTENT_TYPE, WEB_WX_INIT},
     errors::Error,
-    resp::{LoginInfo, ResponseCheckLogin, ResponseWebInit},
+    resp::{
+        LoginInfo, ResponseCheckLogin, ResponseSyncCheck, ResponseSyncMessage, ResponseWebInit,
+        SyncKey,
+    },
     storage::{BaseRequest, WechatDomain},
 };
 
-use super::http::{check_login, get_login_info, get_login_uuid, web_wx_status_notify, Mode};
+use super::http::{
+    check_login, get_login_info, get_login_uuid, sync_message, web_wx_status_notify, Mode,
+};
 
 pub struct Client {
     client: reqwest::Client,
@@ -209,6 +215,25 @@ impl Client {
     ) -> Result<(), Error> {
         debug!("client::web_wx_status_notify");
         web_wx_status_notify(self, base_req, user_name, login_info).await
+    }
+
+    pub async fn sync_check(
+        &self,
+        device_id: &str,
+        web_init_resp: &ResponseWebInit,
+        login_info: &LoginInfo,
+    ) -> Result<ResponseSyncCheck, Error> {
+        debug!("client::sync_check");
+        sync_check(self, device_id, web_init_resp, login_info).await
+    }
+
+    pub async fn sync_message(
+        &self,
+        base_req: &BaseRequest,
+        sync_key: &SyncKey,
+        login_info: &LoginInfo,
+    ) -> Result<ResponseSyncMessage, Error> {
+        sync_message(self, base_req, sync_key, login_info).await
     }
 }
 

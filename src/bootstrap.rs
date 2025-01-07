@@ -5,10 +5,14 @@ use crate::{bot, caller::Mode, consts::QRCODE, errors::Error};
 pub async fn run() -> Result<(), Error> {
     let mut bot = bot::Bot::default();
 
+    // let mut bot = bot.lock().await;
+
     bot.set_uuid_callback(println_qrcode_url);
     bot.set_mode(Mode::Desktop);
 
-    bot.hot_login().await
+    bot.hot_login().await?;
+
+    bot.message_loop().await
 }
 
 /// 打印登录二维码

@@ -7,7 +7,10 @@ use reqwest_cookie_store::CookieStore;
 
 use crate::resp::LoginInfo;
 use crate::resp::ResponseCheckLogin;
+use crate::resp::ResponseSyncCheck;
+use crate::resp::ResponseSyncMessage;
 use crate::resp::ResponseWebInit;
+use crate::resp::SyncKey;
 use crate::{
     errors::Error,
     storage::{BaseRequest, WechatDomain},
@@ -80,6 +83,29 @@ impl Caller {
         debug!("caller::web_wx_status_notify");
         self.client
             .web_wx_status_notify(base_req, user_name, login_info)
+            .await
+    }
+
+    pub async fn sync_check(
+        &self,
+        device_id: &str,
+        web_init_resp: &ResponseWebInit,
+        login_info: &LoginInfo,
+    ) -> Result<ResponseSyncCheck, Error> {
+        debug!("client::sync_check");
+        self.client
+            .sync_check(device_id, web_init_resp, login_info)
+            .await
+    }
+
+    pub async fn sync_message(
+        &self,
+        base_req: &BaseRequest,
+        sync_key: &SyncKey,
+        login_info: &LoginInfo,
+    ) -> Result<ResponseSyncMessage, Error> {
+        self.client
+            .sync_message(base_req, sync_key, login_info)
             .await
     }
 }
