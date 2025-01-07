@@ -158,6 +158,7 @@ impl Bot {
     }
 
     async fn dump_hot_reload_storage(&mut self) -> Result<(), Error> {
+        debug!("bot::dump_hot_reload_storage");
         let cookies = self.caller.get_coookies().await;
         let item = HotReloadStorageItem {
             cookies,

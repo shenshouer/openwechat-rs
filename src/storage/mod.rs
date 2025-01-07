@@ -67,7 +67,6 @@ where
 {
     let mut map = serializer.serialize_map(Some(cookies.len()))?;
     for (key, v) in cookies.iter() {
-        dbg!(key, v);
         let mut buffer = Vec::new();
         // 此处需要保存过期和非持久化的cookie
         v.save_incl_expired_and_nonpersistent(&mut buffer, serde_json::to_string)
